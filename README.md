@@ -9,142 +9,6 @@ This repository implements the corresponding **Policy Decision Point (PDP)** and
 
 ---
 
-## System Architecture
-
-```mermaid
-flowchart LR
-    subgraph Edge["Edge tier: iot/ (submodule)"]
-        GW["gateway-esp32<br/>PEP"]
-        CAM["esp32cam<br/>movement recorder"]
-    end
-
-    subgraph PDP["Decision tier: this repository"]
-        API["FastAPI<br/>src/main.py"]
-        ENG["Deterministic engine<br/>src/mcp_server/engine"]
-        CREW["CrewAI agents<br/>src/llm"]
-        MCP["7 MCP servers<br/>src/mcp_server/servers"]
-        SOT[("Source of truth<br/>config/*.yaml")]
-        LOG[("Hash-chained<br/>decision log")]
-    end
-
-    OP["Operator<br/>CLI / Open WebUI"]
-
-    GW -- "AccessRequest" --> API
-    API -- "signed decision" --> GW
-    API --> ENG --> SOT
-    API --> CREW
-    CREW -- "MCP (stdio)" --> MCP
-    MCP --> ENG
-    MCP -- "HTTP API" --> GW & CAM
-    API --> LOG
-    OP --> API
-```
-
-| Layer | Location | Responsibility |
-|---|---|---|
-| Edge firmware | `iot/` (submodule [1]) | Credential capture, actuation, motion detection, device HTTP API |
-| Device adapter | `src/mcp_server/devices/` | Southbound HTTP clients for the gateway and recorder APIs |
-| Engine | `src/mcp_server/engine/` | Rules, risk, correlation, verification, plans, audit log; no I/O and no LLM |
-| MCP servers | `src/mcp_server/servers/` | Role-scoped tools over the engine and the devices |
-| Agents | `src/llm/` | Access-review crew, operations crew, PDP service |
-| Entry points | `src/main.py`, `src/cli.py` | HTTP API for gateways and operators; command line |
-
----
-
-## Reasoning Model
-
-The reasoning model is specified in [docs/reasoning.md](docs/reasoning.md). Its two parts are summarised here.
-
-### Access Decision
-
-```mermaid
-flowchart TB
-    REQ(["<b>AccessRequest</b><br/>txn · door · uid · pinDigest"])
-
-    subgraph ENGINE["Deterministic engine: no LLM, stops at the first failing stage"]
-        direction LR
-        V["<b>1 · Validate</b><br/>PEP token<br/>freshness · replay"]
-        I["<b>2 · Identify</b><br/>card status<br/>subject status"]
-        A["<b>3 · Authenticate</b><br/>SHA-256(txn:pin)"]
-        Z["<b>4 · Authorize</b><br/>ABAC rules<br/>deny-overrides"]
-        K["<b>5 · Risk</b><br/>lockdown · velocity<br/>tailgate · tamper"]
-        V --> I --> A --> Z --> K
-    end
-
-    subgraph AGENTS["Agent review: preliminary permits only, within the decision budget"]
-        direction LR
-        EA["<b>Evidence analyst</b><br/>observer · auditor"]
-        AJ["<b>Access judge</b><br/>guidance · identity"]
-        EA -->|evidence brief| AJ
-    end
-
-    C{"<b>Combine</b><br/>agents can only tighten"}
-    P(["<b>PERMIT</b><br/>HMAC-signed"])
-    D(["<b>DENY</b><br/>HMAC-signed"])
-    LOG[("Hash-chained<br/>decision log")]
-
-    REQ --> ENGINE
-    ENGINE -->|preliminary permit| AGENTS
-    AGENTS -->|verdict + confidence| C
-    ENGINE -.->|first failing stage| D
-    C -->|confirmed| P
-    C -->|deny · low confidence · failure| D
-    P --> LOG
-    D --> LOG
-
-    classDef io fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
-    classDef stage fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
-    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
-    classDef gate fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:1.5px
-    classDef permit fill:#e2f4e6,stroke:#2e7d32,color:#103a17,stroke-width:2px
-    classDef deny fill:#fbe4e4,stroke:#c62828,color:#4a1010,stroke-width:2px
-    class REQ,LOG io
-    class V,I,A,Z,K stage
-    class EA,AJ agent
-    class C gate
-    class P permit
-    class D deny
-    style ENGINE fill:transparent,stroke:#3d6bb3,stroke-dasharray:5 4
-    style AGENTS fill:transparent,stroke:#7a4fb5,stroke-dasharray:5 4
-```
-
-* **Deterministic stages** stop at the first denial. Authorisation evaluates ABAC rules (target and condition) with deny-overrides and default deny. A denial reports the first *near miss*, for example `outside_schedule` or `insufficient_clearance`.
-* **Risk** joins badge and camera events into movement classes (attested transit, unattested motion, unconsummated grant) [1]. It denies on critical signals (lockdown, denial velocity) and forwards the others to the agents.
-* **Agent review** runs only on a preliminary permit. An evidence analyst and an access judge apply the guidance in `config/policies.yaml` and return a structured verdict.
-* **Combination** lets an agent turn a permit into a deny, never the reverse. A failure, a timeout or low confidence denies by default.
-* **Fail-secure**: every error is answered with a signed deny with HTTP 200, so the gateway never falls back to its offline cache because of a PDP-side fault.
-
-### Configuration
-
-The orchestrator delegates to a configurator, an executor and a compliance auditor. A change reaches a device or a policy file only as a **plan** issued by the verifier, which carries a checksum, an expiry and the document version it was judged against. Policy edits are rejected if they change the outcome of any regression scenario in `config/scenarios.yaml`. The offline cache is derived so that it never grants more than the live policy would: only offline-enabled rules, two factors, and a TTL that ends with the rule's schedule window.
-
----
-
-## MCP Servers
-
-Seven servers act as the agents' operations team. Each agent connects only to the servers its role requires.
-
-| Server | Role | Principal tools |
-|---|---|---|
-| `librarian` | Source of truth for site, doors and policy | `get_site_overview`, `get_door`, `get_policies`, `get_guidance` |
-| `identity` | Subjects, cards, enrolment (PINs never returned) | `get_subject`, `resolve_card`, `arm_card_enrolment` |
-| `verifier` | Pre-deployment validation; issues plans | `verify_gateway_config`, `verify_policy_change`, `verify_offline_acl` |
-| `deployer` | Applies verified plans; rollback; overrides | `apply_plan`, `rollback_gateway`, `override_door` |
-| `observer` | Live node state and movement correlation | `get_gateway_status`, `correlate_door_movements` |
-| `auditor` | Compliance, anomalies, decision log | `check_compliance`, `detect_door_anomalies`, `explain_decision` |
-| `simulator` | What-if requests and regression scenarios | `simulate_access`, `run_policy_scenarios` |
-
-| Agent | Crew | Servers |
-|---|---|---|
-| Evidence analyst | access review | observer, auditor |
-| Access judge | access review | librarian, identity, auditor |
-| Orchestrator | operations (manager) | none |
-| Configurator | operations | librarian, identity, verifier, simulator |
-| Executor | operations | deployer, observer |
-| Compliance auditor | operations | auditor, observer, simulator |
-
----
-
 ## Project Structure
 
 ```
@@ -181,6 +45,205 @@ llm-access/
 ├── tests/                      # Unit and integration tests
 └── pyproject.toml
 ```
+
+---
+
+## System Architecture
+
+```mermaid
+flowchart TB
+    OP(["<b>Operator</b><br/>intents, reviews, audits"])
+
+    subgraph EDGE["Edge tier: enforcement and evidence, linked as the iot/ submodule"]
+        direction LR
+        PEP["<b>Enforcement point</b><br/>captures card and PIN,<br/>actuates the latch"]
+        REC["<b>Movement recorder</b><br/>records motion<br/>at the door"]
+    end
+
+    PDP{"<b>Policy decision point</b><br/>staged decision pipeline"}
+
+    subgraph AGENTS["Agent layer: reasoning that rules cannot encode"]
+        direction LR
+        REV["<b>Review crew</b><br/>evidence analyst,<br/>access judge"]
+        OPS["<b>Operations crew</b><br/>orchestrator, configurator,<br/>executor, auditor"]
+    end
+
+    subgraph TOOLS["MCP tool layer: seven role-scoped servers, least privilege per agent"]
+        direction LR
+        KNOW["<b>Knowledge</b><br/>librarian, identity"]
+        CHANGE["<b>Change</b><br/>verifier, deployer"]
+        ASSURE["<b>Assurance</b><br/>observer, auditor,<br/>simulator"]
+    end
+
+    subgraph CORE["Deterministic core: no LLM, reproducible"]
+        direction LR
+        ENG["<b>Decision engine</b><br/>rules, risk,<br/>verification"]
+        SOT[("<b>Source of truth</b><br/>site, identities,<br/>policy")]
+        AUD[("<b>Audit state</b><br/>decision log,<br/>verified plans")]
+    end
+
+    EDGE <-->|access request, signed decision| PDP
+    PDP <-->|review of permits| AGENTS
+    OP -->|intent| AGENTS
+    AGENTS -->|tool calls| TOOLS
+    PDP --> CORE
+    TOOLS --> CORE
+    TOOLS -.->|status, events, verified changes| EDGE
+
+    classDef edge fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
+    classDef pdp fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:2px
+    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
+    classDef tool fill:#e0f2f1,stroke:#00796b,color:#0b3a35,stroke-width:1.5px
+    classDef core fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
+    class OP,PEP,REC edge
+    class PDP pdp
+    class REV,OPS agent
+    class KNOW,CHANGE,ASSURE tool
+    class ENG,SOT,AUD core
+    style EDGE fill:transparent,stroke:#5b6b80,stroke-dasharray:5 4
+    style AGENTS fill:transparent,stroke:#7a4fb5,stroke-dasharray:5 4
+    style TOOLS fill:transparent,stroke:#00796b,stroke-dasharray:5 4
+    style CORE fill:transparent,stroke:#3d6bb3,stroke-dasharray:5 4
+```
+
+The decision tier is implemented in Python: the agents run on CrewAI with any supported LLM (Claude by default), the tool layer on the Model Context Protocol, and the decision interface on FastAPI.
+
+| Layer | Location | Responsibility |
+|---|---|---|
+| Edge firmware | `iot/` (submodule [1]) | Credential capture, actuation, motion detection, device HTTP API |
+| Device adapter | `src/mcp_server/devices/` | Southbound HTTP clients for the gateway and recorder APIs |
+| Engine | `src/mcp_server/engine/` | Rules, risk, correlation, verification, plans, audit log; no I/O and no LLM |
+| MCP servers | `src/mcp_server/servers/` | Role-scoped tools over the engine and the devices |
+| Agents | `src/llm/` | Access-review crew, operations crew, PDP service |
+| Entry points | `src/main.py`, `src/cli.py` | HTTP API for gateways and operators; command line |
+
+---
+
+## Reasoning Model
+
+The reasoning model is specified in [docs/reasoning.md](docs/reasoning.md). Its two parts are summarised here.
+
+### Access Decision
+
+```mermaid
+flowchart TB
+    REQ(["<b>Access request</b><br/>from the enforcement point"])
+    SOT[("<b>Source of truth</b><br/>identities and policy")]
+    EVD[("<b>Door evidence</b><br/>gateway and camera events")]
+
+    subgraph ENGINE["Deterministic engine: no LLM, stops at the first failing stage"]
+        direction LR
+        V["<b>1. Validate</b><br/>trusted gateway,<br/>fresh transaction"]
+        I["<b>2. Identify</b><br/>active card<br/>and subject"]
+        A["<b>3. Authenticate</b><br/>PIN bound to<br/>the transaction"]
+        Z["<b>4. Authorize</b><br/>attribute rules,<br/>deny overrides"]
+        K["<b>5. Assess risk</b><br/>live door<br/>evidence"]
+        V --> I --> A --> Z --> K
+    end
+
+    subgraph AGENTS["Agent review: preliminary permits only, within the decision budget"]
+        direction LR
+        EA["<b>Evidence analyst</b><br/>explains what happened<br/>at the door"]
+        AJ["<b>Access judge</b><br/>applies the written<br/>guidance"]
+        EA -->|evidence brief| AJ
+    end
+
+    C{"<b>Combine</b><br/>agents can only tighten"}
+    P(["<b>Permit</b><br/>signed for the gateway"])
+    D(["<b>Deny</b><br/>signed for the gateway"])
+    LOG[("<b>Decision log</b><br/>hash-chained")]
+
+    REQ --> ENGINE
+    SOT -.-> ENGINE
+    EVD -.-> ENGINE
+    EVD -.->|through MCP tools| AGENTS
+    ENGINE -->|preliminary permit| AGENTS
+    AGENTS -->|verdict and confidence| C
+    ENGINE -.->|first failing stage| D
+    C -->|confirmed| P
+    C -->|deny, low confidence or failure| D
+    P --> LOG
+    D --> LOG
+
+    classDef io fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
+    classDef stage fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
+    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
+    classDef gate fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:1.5px
+    classDef permit fill:#e2f4e6,stroke:#2e7d32,color:#103a17,stroke-width:2px
+    classDef deny fill:#fbe4e4,stroke:#c62828,color:#4a1010,stroke-width:2px
+    class REQ,SOT,EVD,LOG io
+    class V,I,A,Z,K stage
+    class EA,AJ agent
+    class C gate
+    class P permit
+    class D deny
+    style ENGINE fill:transparent,stroke:#3d6bb3,stroke-dasharray:5 4
+    style AGENTS fill:transparent,stroke:#7a4fb5,stroke-dasharray:5 4
+```
+
+* **Deterministic stages** stop at the first denial. Authorisation evaluates ABAC rules (target and condition) with deny-overrides and default deny. A denial reports the first *near miss*, for example `outside_schedule` or `insufficient_clearance`.
+* **Risk** joins badge and camera events into movement classes (attested transit, unattested motion, unconsummated grant) [1]. It denies on critical signals (lockdown, denial velocity) and forwards the others to the agents.
+* **Agent review** runs only on a preliminary permit. An evidence analyst and an access judge apply the guidance in `config/policies.yaml` and return a structured verdict.
+* **Combination** lets an agent turn a permit into a deny, never the reverse. A failure, a timeout or low confidence denies by default.
+* **Fail-secure**: every error is answered with a signed deny with HTTP 200, so the gateway never falls back to its offline cache because of a PDP-side fault.
+
+### Configuration
+
+```mermaid
+flowchart LR
+    INT(["<b>Operator intent</b>"])
+    ORCH{"<b>Orchestrator</b><br/>delegates and<br/>enforces the order"}
+    CFG["<b>Configurator</b><br/>reads the facts, designs<br/>the smallest change"]
+    VER["<b>Verifier</b><br/>device limits, site<br/>invariants, scenarios"]
+    EXE["<b>Executor</b><br/>applies the plan,<br/>reads the device back"]
+    AUD["<b>Compliance auditor</b><br/>baseline, anomalies,<br/>regressions"]
+    REP(["<b>Report</b>"])
+
+    INT --> ORCH --> CFG
+    CFG -->|proposed change| VER
+    VER -.->|rejected with reasons| CFG
+    VER -->|verified plan id| EXE
+    EXE -->|applied changes| AUD
+    AUD --> REP
+
+    classDef io fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
+    classDef gate fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:1.5px
+    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
+    classDef check fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
+    class INT,REP io
+    class ORCH gate
+    class CFG,EXE,AUD agent
+    class VER check
+```
+
+The orchestrator delegates to a configurator, an executor and a compliance auditor. A change reaches a device or a policy file only as a **plan** issued by the verifier, which carries a checksum, an expiry and the document version it was judged against. Policy edits are rejected if they change the outcome of any regression scenario in `config/scenarios.yaml`. The offline cache is derived so that it never grants more than the live policy would: only offline-enabled rules, two factors, and a TTL that ends with the rule's schedule window.
+
+---
+
+## MCP Servers
+
+Seven servers act as the agents' operations team. Each agent connects only to the servers its role requires.
+
+| Server | Role | Principal tools |
+|---|---|---|
+| `librarian` | Source of truth for site, doors and policy | `get_site_overview`, `get_door`, `get_policies`, `get_guidance` |
+| `identity` | Subjects, cards, enrolment (PINs never returned) | `get_subject`, `resolve_card`, `arm_card_enrolment` |
+| `verifier` | Pre-deployment validation; issues plans | `verify_gateway_config`, `verify_policy_change`, `verify_offline_acl` |
+| `deployer` | Applies verified plans; rollback; overrides | `apply_plan`, `rollback_gateway`, `override_door` |
+| `observer` | Live node state and movement correlation | `get_gateway_status`, `correlate_door_movements` |
+| `auditor` | Compliance, anomalies, decision log | `check_compliance`, `detect_door_anomalies`, `explain_decision` |
+| `simulator` | What-if requests and regression scenarios | `simulate_access`, `run_policy_scenarios` |
+
+The servers fall into three groups by what they allow an agent to do: read the source of truth (`librarian`, `identity`), change the system (`verifier`, `deployer`), or check the live system (`observer`, `auditor`, `simulator`). Each agent is connected only to the groups its role needs. The review crew can therefore only read, the configurator can propose changes but not apply them, and only the executor can deploy, and only a plan the verifier has issued. The orchestrator has no tools and works by delegation alone.
+
+| Agent | Crew | Servers |
+|---|---|---|
+| Evidence analyst | access review | observer, auditor |
+| Access judge | access review | librarian, identity, auditor |
+| Orchestrator | operations (manager) | none |
+| Configurator | operations | librarian, identity, verifier, simulator |
+| Executor | operations | deployer, observer |
+| Compliance auditor | operations | auditor, observer, simulator |
 
 ---
 
@@ -325,19 +388,6 @@ In Open WebUI, add an OpenAI API connection with base URL `http://localhost:8080
 pytest          # engine, verifier, deployer, PDP service and API, against a simulated gateway
 ruff check .
 ```
-
----
-
-## Technology Stack
-
-| Component | Technology | Purpose |
-|---|---|---|
-| Agent orchestration | CrewAI | Sequential review crew; hierarchical operations crew |
-| Tool protocol | Model Context Protocol (FastMCP) | Seven role-scoped tool servers |
-| LLM | Claude (default), any CrewAI-supported provider | Guidance-based review and operations reasoning |
-| API | FastAPI, Uvicorn | PDP endpoint, operations, OpenAI-compatible chat |
-| Models and validation | Pydantic | Typed domain, structured agent outputs |
-| Edge tier | ESP32, ESP32-CAM [1] | Enforcement and movement attestation |
 
 ---
 
