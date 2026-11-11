@@ -49,55 +49,64 @@ llm-access/
 
 ```mermaid
 flowchart TB
-    OP(["<b>Operator</b><br/>intents, reviews, audits"])
-
-    subgraph EDGE["Edge tier (iot/)"]
-        direction LR
+    subgraph CLIENTS["Clients"]
         PEP["<b>Enforcement point</b><br/>captures card and PIN,<br/>actuates the latch"]
         REC["<b>Movement recorder</b><br/>records motion<br/>at the door"]
+        OP["<b>Operator</b><br/>intents, reviews,<br/>audits"]
     end
 
-    PDP{"<b>Policy decision point</b><br/>staged decision pipeline"}
+    subgraph INTERFACE["Decision tier interface"]
+        PDP["<b>Policy decision point</b><br/>answers every<br/>access request"]
+        OPI["<b>Operations interface</b><br/>takes operator<br/>intents"]
+    end
 
     subgraph AGENTS["Agent layer"]
-        direction LR
         REV["<b>Review crew</b><br/>evidence analyst,<br/>access judge"]
         OPS["<b>Operations crew</b><br/>orchestrator, configurator,<br/>executor, auditor"]
     end
 
     subgraph TOOLS["MCP tool layer"]
-        direction LR
-        KNOW["<b>Knowledge</b><br/>librarian, identity"]
-        CHANGE["<b>Change</b><br/>verifier, deployer"]
+        KNOW["<b>Knowledge</b><br/>librarian,<br/>identity"]
+        CHANGE["<b>Change</b><br/>verifier,<br/>deployer"]
         ASSURE["<b>Assurance</b><br/>observer, auditor,<br/>simulator"]
     end
 
     subgraph CORE["Deterministic core"]
-        direction LR
         ENG["<b>Decision engine</b><br/>rules, risk,<br/>verification"]
         SOT[("<b>Source of truth</b><br/>site, identities,<br/>policy")]
         AUD[("<b>Audit state</b><br/>decision log,<br/>verified plans")]
     end
 
-    EDGE <-->|access request, signed decision| PDP
-    PDP <-->|review of permits| AGENTS
-    OP -->|intent| AGENTS
-    AGENTS -->|tool calls| TOOLS
-    PDP --> CORE
-    TOOLS --> CORE
-    TOOLS -.->|status, events, verified changes| EDGE
+    PEP <-->|access request, signed decision| PDP
+    REC -.->|motion evidence| PDP
+    OP -->|intent| OPI
+    PDP <-->|permit review| REV
+    OPI --> OPS
+    PDP --> ENG
+    REV --> KNOW
+    REV --> ASSURE
+    OPS --> KNOW
+    OPS --> CHANGE
+    OPS --> ASSURE
+    KNOW --> SOT
+    CHANGE --> ENG
+    CHANGE --> AUD
+    ASSURE --> ENG
+    ASSURE --> AUD
+    CHANGE -.->|verified changes| PEP
 
-    classDef edge fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
-    classDef pdp fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:2px
+    classDef client fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
+    classDef iface fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:2px
     classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
     classDef tool fill:#e0f2f1,stroke:#00796b,color:#0b3a35,stroke-width:1.5px
     classDef core fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
-    class OP,PEP,REC edge
-    class PDP pdp
+    class PEP,REC,OP client
+    class PDP,OPI iface
     class REV,OPS agent
     class KNOW,CHANGE,ASSURE tool
     class ENG,SOT,AUD core
-    style EDGE fill:transparent,stroke:#5b6b80,stroke-dasharray:5 4
+    style CLIENTS fill:transparent,stroke:#5b6b80,stroke-dasharray:5 4
+    style INTERFACE fill:transparent,stroke:#b8860b,stroke-dasharray:5 4
     style AGENTS fill:transparent,stroke:#7a4fb5,stroke-dasharray:5 4
     style TOOLS fill:transparent,stroke:#00796b,stroke-dasharray:5 4
     style CORE fill:transparent,stroke:#3d6bb3,stroke-dasharray:5 4
