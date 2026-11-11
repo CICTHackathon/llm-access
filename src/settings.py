@@ -6,6 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -60,4 +61,8 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    # Export .env into the process environment too: the provider SDKs read their API key
+    # from it, the inventory resolves device secrets from it, and the MCP subprocesses
+    # inherit it. Variables already set (by systemd, the shell or tests) take precedence.
+    load_dotenv(".env", override=False)
     return Settings()
