@@ -1,0 +1,55 @@
+# Source of truth for the physical site: zones, doors and the edge nodes behind them.
+# Secrets are never stored here; each node names the environment variables that hold them.
+
+site:
+  id: cict-lab
+  name: CICT Smart Workplace
+  timezone: Asia/Ho_Chi_Minh
+
+zones:
+  lobby:
+    name: Lobby
+    level: 0
+  engineering:
+    name: Engineering lab
+    level: 1
+    department: engineering
+  server_room:
+    name: Server room
+    level: 3
+    department: it
+
+doors:
+  door-1:
+    name: Engineering lab entrance
+    zone: engineering
+    gateway: gw-1
+    camera: cam-1
+    require_pin: true
+    lockdown: false
+  door-2:
+    name: Server room
+    zone: server_room
+    gateway: gw-2
+    require_pin: true
+    lockdown: false
+
+nodes:
+  gw-1:
+    kind: gateway
+    url: http://192.168.1.50
+    door: door-1
+    api_token_env: GW1_API_TOKEN
+    pdp_token_env: GW1_PDP_TOKEN
+    decision_key_env: GW1_DECISION_KEY
+  cam-1:
+    kind: camera
+    url: http://192.168.1.51
+    door: door-1
+  gw-2:
+    kind: gateway
+    url: http://192.168.1.52
+    door: door-2
+    api_token_env: GW2_API_TOKEN
+    pdp_token_env: GW2_PDP_TOKEN
+    decision_key_env: GW2_DECISION_KEY
