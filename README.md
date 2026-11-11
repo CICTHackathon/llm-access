@@ -51,29 +51,29 @@ llm-access/
 flowchart TB
     OP(["<b>Operator</b><br/>intents, reviews, audits"])
 
-    subgraph EDGE["Edge tier: enforcement and evidence, linked as the iot/ submodule"]
-        direction TB
+    subgraph EDGE["Edge tier (iot/)"]
+        direction LR
         PEP["<b>Enforcement point</b><br/>captures card and PIN,<br/>actuates the latch"]
         REC["<b>Movement recorder</b><br/>records motion<br/>at the door"]
     end
 
     PDP{"<b>Policy decision point</b><br/>staged decision pipeline"}
 
-    subgraph AGENTS["Agent layer: reasoning that rules cannot encode"]
-        direction TB
+    subgraph AGENTS["Agent layer"]
+        direction LR
         REV["<b>Review crew</b><br/>evidence analyst,<br/>access judge"]
         OPS["<b>Operations crew</b><br/>orchestrator, configurator,<br/>executor, auditor"]
     end
 
-    subgraph TOOLS["MCP tool layer: seven role-scoped servers, least privilege per agent"]
-        direction TB
+    subgraph TOOLS["MCP tool layer"]
+        direction LR
         KNOW["<b>Knowledge</b><br/>librarian, identity"]
         CHANGE["<b>Change</b><br/>verifier, deployer"]
         ASSURE["<b>Assurance</b><br/>observer, auditor,<br/>simulator"]
     end
 
-    subgraph CORE["Deterministic core: no LLM, reproducible"]
-        direction TB
+    subgraph CORE["Deterministic core"]
+        direction LR
         ENG["<b>Decision engine</b><br/>rules, risk,<br/>verification"]
         SOT[("<b>Source of truth</b><br/>site, identities,<br/>policy")]
         AUD[("<b>Audit state</b><br/>decision log,<br/>verified plans")]
