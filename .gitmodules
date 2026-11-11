@@ -1,0 +1,3 @@
+[submodule "iot"]
+	path = iot
+	url = https://github.com/CICTHackathon/iot-hardware.git
