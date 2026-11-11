@@ -1,0 +1,79 @@
+# Task templates. Placeholders in braces are filled from the crew's inputs; avoid any
+# other braces in these texts.
+
+gather_evidence:
+  agent: evidence_analyst
+  description: >-
+    An access request is pending at door {door} for card {uid} (subject {subject}).
+
+    Deterministic stages already run:
+    {stages}
+
+    Risk signals computed from live evidence:
+    {risk}
+
+    Evidence the PDP could not obtain: {evidence_gaps}
+
+    Summarise the situation at the door. Only call a tool if a signal above needs
+    detail you do not have (for example which events formed an unattested motion).
+    Time is short: at most two tool calls.
+  expected_output: >-
+    A short factual brief: what the signals mean for this door right now, the movement
+    classes seen in the look-back window, and anything that looks like tailgating,
+    probing or tampering. No access recommendation.
+
+judge_access:
+  agent: access_judge
+  description: >-
+    Decide the request at door {door} for subject {subject} (card {uid}), at {at}.
+
+    Subject: {subject_detail}
+    Rules that permitted it: {matched_rules}
+
+    Guidance you must apply:
+    {guidance}
+
+    Use the evidence brief from the analyst. For each guidance statement decide whether
+    it applies. If any applies, the effect is deny. If none applies, the effect is
+    permit. Look up the subject's sponsor or recent decisions only if a guidance
+    statement depends on them.
+  expected_output: >-
+    The verdict: effect (permit or deny), confidence between 0 and 1, a short snake_case
+    code (for example consistent, tailgate_risk, sponsor_inactive), the reasons, and the
+    ids of the guidance statements relied on.
+
+plan_change:
+  agent: configurator
+  description: >-
+    Operator intent: {intent}
+
+    Gather the facts you need from the source of truth, decide the smallest change that
+    satisfies the intent, simulate its effect on access where policy is involved, and
+    verify it. Return the plan ids the verifier issued, with each plan's warnings. If
+    the intent needs no change, or cannot be done safely, say why and return no plans.
+  expected_output: >-
+    The plan ids to deploy, each with what it changes and why, or an explanation of why
+    no plan was issued.
+
+execute_change:
+  agent: executor
+  description: >-
+    Deploy the plans the configurator verified for this intent: {intent}
+
+    Apply each plan id with the deployer, in a sensible order (policy and identity
+    before device caches). After each apply, confirm with the observer that the node
+    reflects it. Stop at the first failure.
+  expected_output: >-
+    For each plan id: applied or failed, what changed on which node, and the device's
+    own confirmation or error.
+
+audit_change:
+  agent: compliance_auditor
+  description: >-
+    The following intent was just handled: {intent}
+
+    Check compliance of the nodes that were touched, re-run the policy regression
+    scenarios, and check the affected doors for anomalies.
+  expected_output: >-
+    A compliance summary: findings by severity, scenario results, anomalies, and a
+    clear statement of whether the site is in a safe state.
