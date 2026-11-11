@@ -1,0 +1,92 @@
+# Policy Administration Point: the rules the PDP evaluates.
+#
+# Rules are combined deny-overrides: any applicable deny wins, otherwise any
+# applicable permit grants, otherwise the request is denied (default deny).
+# `guidance` is natural-language policy the access-judge agent applies on top of
+# the rules. The agent can only tighten a decision, never loosen it.
+
+version: 1
+
+defaults:
+  require_pin: true
+  offline_cache_ttl_s: 3600
+
+risk:
+  # Denials for the same card inside the window that make the next request a hard deny.
+  max_recent_denials: 3
+  recent_denials_window_s: 600
+  # Look-back for door anomalies (unattested motion, bad signatures, remote unlocks).
+  anomaly_window_s: 900
+  # Seconds either side of a badge event that a camera event must fall in to attest it.
+  correlation_window_s: 15
+  # Requests whose epoch differs from PDP time by more than this are stale.
+  max_clock_skew_s: 120
+
+schedules:
+  business_hours:
+    days: [mon, tue, wed, thu, fri]
+    start: "07:00"
+    end: "20:00"
+  extended_hours:
+    days: [mon, tue, wed, thu, fri, sat]
+    start: "06:00"
+    end: "22:00"
+  night_shift:
+    days: [mon, tue, wed, thu, fri, sat, sun]
+    start: "22:00"
+    end: "06:00"
+
+rules:
+  - id: R-STAFF-DEPT
+    description: Employees may enter zones of their own department during extended hours.
+    effect: permit
+    target: {zones: [engineering, server_room]}
+    condition:
+      roles_any: [employee]
+      same_department_as_zone: true
+      clearance_at_least_zone: true
+      schedule: extended_hours
+    offline_cache: true
+
+  - id: R-ADMIN-ANYTIME
+    description: Administrators with level-3 clearance may enter any controlled zone at any time.
+    effect: permit
+    target: {any: true}
+    condition:
+      roles_any: [admin]
+      min_clearance: 3
+    offline_cache: true
+
+  - id: R-CONTRACTOR-HOURS
+    description: Contractors may enter the engineering lab during business hours only.
+    effect: permit
+    target: {zones: [engineering]}
+    condition:
+      roles_any: [contractor]
+      schedule: business_hours
+
+  - id: D-INTERN-SERVER-ROOM
+    description: Interns are never admitted to the server room, whatever else they hold.
+    effect: deny
+    target: {zones: [server_room]}
+    condition:
+      roles_any: [intern]
+
+guidance:
+  - id: G-TAILGATE
+    text: >-
+      If the door recorded unattested motion (a possible tailgate or propped door) in
+      the look-back window, deny contractors and anyone below clearance 2 until an
+      operator has reviewed the footage.
+  - id: G-PROBING
+    text: >-
+      Repeated denials for the same card shortly before this request suggest credential
+      probing; deny unless the denials were explained by an expired schedule window.
+  - id: G-SPONSOR
+    text: >-
+      A contractor is only admitted while their sponsor is an active subject.
+  - id: G-INTEGRITY
+    text: >-
+      If the gateway reported rejected decision signatures or operator remote unlocks in
+      the look-back window, treat the door as possibly tampered with and deny anything
+      but administrator access.

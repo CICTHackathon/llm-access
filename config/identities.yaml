@@ -1,0 +1,67 @@
+# Policy Information Point: who the subjects are and which cards they carry.
+#
+# The gateway salts the PIN with the transaction nonce before hashing it
+# (SHA-256("<txn>:<pin>")), so the PDP has to hold the PIN to verify it.
+# These are bench credentials; in production this file belongs in a secret store.
+
+subjects:
+  - id: alice
+    name: Alice Tran
+    roles: [employee]
+    department: engineering
+    clearance: 1
+    status: active
+  - id: bao
+    name: Bao Le
+    roles: [employee, admin]
+    department: it
+    clearance: 3
+    status: active
+  - id: chi
+    name: Chi Pham
+    roles: [contractor]
+    department: engineering
+    clearance: 1
+    status: active
+    valid_until: 2027-06-30
+    attributes:
+      sponsor: alice
+  - id: dung
+    name: Dung Vo
+    roles: [intern]
+    department: it
+    clearance: 1
+    status: active
+  - id: em
+    name: Em Huynh
+    roles: [employee]
+    department: engineering
+    clearance: 1
+    status: suspended
+
+credentials:
+  - uid: "0xa1b2c3d4"
+    subject: alice
+    pin: "1234"
+    status: active
+  - uid: "0xb2c3d4e5"
+    subject: bao
+    pin: "4321"
+    status: active
+  - uid: "0xc3d4e5f6"
+    subject: chi
+    pin: "5678"
+    status: active
+    expires: 2027-06-30
+  - uid: "0xd4e5f607"
+    subject: dung
+    pin: "8765"
+    status: active
+  - uid: "0xe5f60718"
+    subject: em
+    pin: "1111"
+    status: active
+  - uid: "0xf6071829"
+    subject: alice
+    pin: "1234"
+    status: revoked
