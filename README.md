@@ -64,8 +64,55 @@ The reasoning model is specified in [docs/reasoning.md](docs/reasoning.md). Its 
 
 ### Access Decision
 
-```
-validate -> identify -> authenticate -> authorize -> risk -> agent review -> combine -> sign
+```mermaid
+flowchart TB
+    REQ(["<b>AccessRequest</b><br/>txn · door · uid · pinDigest"])
+
+    subgraph ENGINE["Deterministic engine: no LLM, stops at the first failing stage"]
+        direction LR
+        V["<b>1 · Validate</b><br/>PEP token<br/>freshness · replay"]
+        I["<b>2 · Identify</b><br/>card status<br/>subject status"]
+        A["<b>3 · Authenticate</b><br/>SHA-256(txn:pin)"]
+        Z["<b>4 · Authorize</b><br/>ABAC rules<br/>deny-overrides"]
+        K["<b>5 · Risk</b><br/>lockdown · velocity<br/>tailgate · tamper"]
+        V --> I --> A --> Z --> K
+    end
+
+    subgraph AGENTS["Agent review: preliminary permits only, within the decision budget"]
+        direction LR
+        EA["<b>Evidence analyst</b><br/>observer · auditor"]
+        AJ["<b>Access judge</b><br/>guidance · identity"]
+        EA -->|evidence brief| AJ
+    end
+
+    C{"<b>Combine</b><br/>agents can only tighten"}
+    P(["<b>PERMIT</b><br/>HMAC-signed"])
+    D(["<b>DENY</b><br/>HMAC-signed"])
+    LOG[("Hash-chained<br/>decision log")]
+
+    REQ --> ENGINE
+    ENGINE -->|preliminary permit| AGENTS
+    AGENTS -->|verdict + confidence| C
+    ENGINE -.->|first failing stage| D
+    C -->|confirmed| P
+    C -->|deny · low confidence · failure| D
+    P --> LOG
+    D --> LOG
+
+    classDef io fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
+    classDef stage fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
+    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
+    classDef gate fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:1.5px
+    classDef permit fill:#e2f4e6,stroke:#2e7d32,color:#103a17,stroke-width:2px
+    classDef deny fill:#fbe4e4,stroke:#c62828,color:#4a1010,stroke-width:2px
+    class REQ,LOG io
+    class V,I,A,Z,K stage
+    class EA,AJ agent
+    class C gate
+    class P permit
+    class D deny
+    style ENGINE fill:transparent,stroke:#3d6bb3,stroke-dasharray:5 4
+    style AGENTS fill:transparent,stroke:#7a4fb5,stroke-dasharray:5 4
 ```
 
 * **Deterministic stages** stop at the first denial. Authorisation evaluates ABAC rules (target and condition) with deny-overrides and default deny. A denial reports the first *near miss*, for example `outside_schedule` or `insufficient_clearance`.
