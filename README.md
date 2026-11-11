@@ -1,13 +1,12 @@
 # LLM Access: Multi-Agent Policy Decision for IoT Smart Gates
 
----
-## Overview: Policy- and Rule-Based Access Reasoning over Standardised MCP Interfaces
+*Policy- and rule-based access reasoning over standardised MCP interfaces.*
 
-Smart workplaces protect their zones with network-attached gates that capture a credential and defer the decision to a central policy engine. The edge tier of this system, the *Smart Gateway* [1], implements the Policy Enforcement Point (PEP) of the NIST SP 800-162 ABAC reference model [2]. An ESP32 node captures an RFID UID and a nonce-salted PIN digest, and an ESP32-CAM independently records movement through the portal. Neither node holds organisational policy.
+## Overview
 
-This repository implements the corresponding **Policy Decision Point (PDP)** and the operations layer around it. Each access request is decided by a staged reasoning pipeline. Deterministic stages (validation, identification, authentication, ABAC authorisation with XACML deny-overrides [3], and evidence-based risk) establish what is certain. A crew of language-model agents then applies natural-language guidance to live device evidence, and may only *tighten* the outcome. The same agents, organised as a hierarchical team, configure gates, recorders and policy through a plan, verify, deploy and audit workflow. The workflow follows the multi-server MCP design of the AI Network Engineer [4], and the LLM-to-MCP architecture of earlier intent-orchestration prototypes [5, 6]. This repository depends only on the devices' published HTTP contract, which keeps the decision layer separate from the enforcement layer.
+Smart workplaces guard their zones with network-attached gates that capture a credential and defer the decision to a central policy engine. The *Smart Gateway* [1] provides this edge tier: an ESP32 node acting as the Policy Enforcement Point (PEP) of the NIST SP 800-162 ABAC model [2], which captures an RFID UID and a nonce-salted PIN digest, and an ESP32-CAM that independently records movement through the portal. Neither node holds policy.
 
----
+This repository is the matching **Policy Decision Point (PDP)**. Deterministic stages (validation, identification, authentication, ABAC authorisation with XACML deny-overrides [3], and risk) establish what is certain; language-model agents then apply natural-language guidance to live evidence and may only *tighten* the outcome. The same agents configure gates, recorders and policy through a plan, verify, deploy and audit workflow, following the multi-server MCP design of [4] and the LLM-to-MCP prototypes [5, 6]. The firmware is linked as a submodule and reached only through its HTTP API, keeping the decision layer separate from the enforcement layer.
 
 ## Project Structure
 
@@ -45,8 +44,6 @@ llm-access/
 ├── tests/                      # Unit and integration tests
 └── pyproject.toml
 ```
-
----
 
 ## System Architecture
 
@@ -116,8 +113,6 @@ The decision tier is implemented in Python: the agents run on CrewAI with any su
 | MCP servers | `src/mcp_server/servers/` | Role-scoped tools over the engine and the devices |
 | Agents | `src/llm/` | Access-review crew, operations crew, PDP service |
 | Entry points | `src/main.py`, `src/cli.py` | HTTP API for gateways and operators; command line |
-
----
 
 ## Reasoning Model
 
@@ -218,8 +213,6 @@ flowchart LR
 
 The orchestrator delegates to a configurator, an executor and a compliance auditor. A change reaches a device or a policy file only as a **plan** issued by the verifier, which carries a checksum, an expiry and the document version it was judged against. Policy edits are rejected if they change the outcome of any regression scenario in `config/scenarios.yaml`. The offline cache is derived so that it never grants more than the live policy would: only offline-enabled rules, two factors, and a TTL that ends with the rule's schedule window.
 
----
-
 ## MCP Servers
 
 Seven servers act as the agents' operations team. Each agent connects only to the servers its role requires.
@@ -244,8 +237,6 @@ The servers fall into three groups by what they allow an agent to do: read the s
 | Configurator | operations | librarian, identity, verifier, simulator |
 | Executor | operations | deployer, observer |
 | Compliance auditor | operations | auditor, observer, simulator |
-
----
 
 ## Quick Setup
 
@@ -389,16 +380,12 @@ pytest          # engine, verifier, deployer, PDP service and API, against a sim
 ruff check .
 ```
 
----
-
 ## Security Considerations
 
 * The PDP must hold PINs to verify the nonce-salted digest. `config/identities.yaml` contains bench credentials only; a deployment should keep it in a secret store.
 * Secrets are resolved from environment variables named in the inventory. They are never exposed to agents or written to plans.
 * Physical actuation through agents (`override_door`) is disabled unless `LLM_ACCESS_ALLOW_ACTUATION=true`, and the gateway audits every override.
 * The recorder's HTTP API is unauthenticated [1] and belongs on an isolated network.
-
----
 
 ## References
 
