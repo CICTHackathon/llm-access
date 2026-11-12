@@ -13,6 +13,9 @@ import sys
 from collections.abc import Iterable
 from typing import Any
 
+from crewai_tools import MCPServerAdapter
+from mcp import StdioServerParameters
+
 ROLE_SERVERS: dict[str, tuple[str, ...]] = {
     "evidence_analyst": ("observer", "auditor"),
     "access_judge": ("librarian", "identity", "auditor"),
@@ -45,9 +48,6 @@ class Toolbox:
         self._adapters: dict[str, Any] = {}
 
     def start(self) -> Toolbox:
-        from crewai_tools import MCPServerAdapter
-        from mcp import StdioServerParameters
-
         for name in self._servers:
             if name in self._adapters:
                 continue

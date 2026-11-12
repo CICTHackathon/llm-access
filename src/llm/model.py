@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from crewai import LLM
+
 from src.settings import Settings
 
 
 def build_llm(settings: Settings) -> Any:
-    from crewai import LLM
-
     kwargs: dict[str, Any] = {"model": settings.llm_model}
     if settings.llm_base_url:
         kwargs["base_url"] = settings.llm_base_url
