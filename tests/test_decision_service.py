@@ -8,9 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.llm.decision import DecisionService
+from src.main import app
 from src.mcp_server.engine.domain.access import AgentVerdict
 from src.mcp_server.engine.security import pin_digest, verify_decision
-from tests.conftest import DECISION_KEY
+from tests.conftest import DECISION_KEY, local
 
 TXN = "a0a1a2a3a4a5a6a7"
 
@@ -33,8 +34,6 @@ def body(uid: str = "0xa1b2c3d4", pin: str = "1234", txn: str = TXN) -> dict[str
 
 @pytest.fixture
 def business_hours(monkeypatch, runtime):
-    from tests.conftest import local
-
     fixed = local("2026-11-10T09:00")
     monkeypatch.setattr(runtime.sot, "local_time",
                         lambda at=None: fixed if at is None else at)
@@ -105,8 +104,6 @@ async def test_decision_log_chain_detects_tampering(runtime, business_hours) -> 
 
 def test_http_endpoint_with_agents_off(runtime, monkeypatch) -> None:
     monkeypatch.setattr(runtime.settings, "agent_review", "off")
-    from src.main import app
-
     with TestClient(app) as client:
         assert client.get("/health").json()["agent_review"] == "off"
         reply = client.post("/pdp/decide", json=body(uid="0xe5f60718", pin="1111"),

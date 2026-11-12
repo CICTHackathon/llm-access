@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from crewai import Agent, Crew, Process, Task
 from pydantic import BaseModel, Field
 
 from src.llm.model import build_llm
@@ -48,8 +49,6 @@ class CrewFactory:
         self.llm = build_llm(settings)
 
     def agent(self, key: str, **overrides: Any) -> Any:
-        from crewai import Agent
-
         spec = _config("agents")[key]
         tools = self.toolbox.tools_for(key) if self.toolbox else []
         params: dict[str, Any] = {
@@ -61,8 +60,6 @@ class CrewFactory:
         return Agent(**params)
 
     def task(self, key: str, *, agent: Any = None, prefix: str = "", **overrides: Any) -> Any:
-        from crewai import Task
-
         spec = _config("tasks")[key]
         params: dict[str, Any] = {"description": prefix + spec["description"],
                                   "expected_output": spec["expected_output"]}
@@ -81,8 +78,6 @@ class AccessReviewer:
         self.factory = CrewFactory(settings, self.toolbox)
 
     def review(self, inputs: dict[str, Any]) -> AgentVerdict:
-        from crewai import Crew, Process
-
         budget = max(int(self.settings.decision_budget_s), 5)
         analyst = self.factory.agent("evidence_analyst", max_iter=3, max_execution_time=budget)
         judge = self.factory.agent("access_judge", max_iter=4, max_execution_time=budget)
@@ -102,8 +97,6 @@ class AccessReviewer:
 
 def run_operations(settings: Settings, intent: str, *, dry_run: bool) -> OperationReport:
     """Carry out an operator intent with the hierarchical operations crew."""
-    from crewai import Crew, Process
-
     env = {"LLM_ACCESS_DEPLOY_MODE": "dry_run" if dry_run else settings.deploy_mode}
     with Toolbox(servers_for(OPERATIONS_ROLES), env=env) as toolbox:
         factory = CrewFactory(settings, toolbox)

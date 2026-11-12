@@ -111,11 +111,8 @@ def test_offline_cache_follows_rules_and_schedules(runtime) -> None:
 
 
 async def test_acl_sync_never_returns_digests(runtime, gateway, monkeypatch) -> None:
-    import src.mcp_server.servers.verifier as verifier_module
-    from src.mcp_server.engine import offline_acl
-
-    real = offline_acl.compute_offline_acl
-    monkeypatch.setattr(verifier_module, "compute_offline_acl",
+    real = compute_offline_acl
+    monkeypatch.setattr(verifier, "compute_offline_acl",
                         lambda sot, door: real(sot, door, local("2026-11-10T10:00")))
     result = verifier.verify_offline_acl("door-1")
     assert "pin" not in json.dumps(result["entries"])

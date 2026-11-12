@@ -28,6 +28,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
 from src import __version__
+from src.llm.crews import AccessReviewer, run_operations
 from src.llm.decision import DecisionService
 from src.mcp_server.runtime import get_runtime
 
@@ -41,8 +42,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     reviewer = None
     if runtime.settings.agent_review != "off":
         try:
-            from src.llm.crews import AccessReviewer
-
             reviewer = await asyncio.to_thread(AccessReviewer, runtime.settings)
         except Exception:  # noqa: BLE001 - the PDP still runs; failure mode decides
             log.exception("agent reviewer unavailable; failure mode %s applies",
@@ -109,8 +108,6 @@ class OpsRequest(BaseModel):
 
 
 async def _run_ops(intent: str, dry_run: bool) -> dict[str, Any]:
-    from src.llm.crews import run_operations
-
     settings = get_runtime().settings
     report = await asyncio.to_thread(run_operations, settings, intent, dry_run=dry_run)
     return report.model_dump()

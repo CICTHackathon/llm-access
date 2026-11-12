@@ -10,6 +10,17 @@ import secrets
 import sys
 from typing import Any
 
+import uvicorn
+
+from src.llm.crews import AccessReviewer, run_operations
+from src.llm.decision import DecisionService
+from src.mcp_server.engine.domain.access import AccessRequest
+from src.mcp_server.engine.security import pin_digest
+from src.mcp_server.engine.source_of_truth import parse_when
+from src.mcp_server.main import main as mcp_main
+from src.mcp_server.runtime import get_runtime
+from src.mcp_server.servers.auditor import check_compliance
+from src.mcp_server.servers.simulator import run_policy_scenarios
 from src.settings import get_settings
 
 
@@ -18,40 +29,26 @@ def _print(data: Any) -> None:
 
 
 def cmd_serve(args: argparse.Namespace) -> None:
-    import uvicorn
-
     settings = get_settings()
     uvicorn.run("src.main:app", host=args.host or settings.host, port=args.port or settings.port)
 
 
 def cmd_mcp(args: argparse.Namespace) -> None:
-    from src.mcp_server.main import main as mcp_main
-
     mcp_main([args.server, "--transport", args.transport, "--port", str(args.port)])
 
 
 def cmd_ops(args: argparse.Namespace) -> None:
-    from src.llm.crews import run_operations
-
     report = run_operations(get_settings(), args.intent, dry_run=not args.live)
     _print(report.model_dump())
 
 
 def cmd_decide(args: argparse.Namespace) -> None:
     """Build the request a gateway would send for this card and PIN, and decide it."""
-    from src.llm.decision import DecisionService
-    from src.mcp_server.engine.domain.access import AccessRequest
-    from src.mcp_server.engine.security import pin_digest
-    from src.mcp_server.engine.source_of_truth import parse_when
-    from src.mcp_server.runtime import get_runtime
-
     runtime = get_runtime()
     if args.no_agents:
         runtime.settings.agent_review = "off"  # rules only, for this invocation
     reviewer = None
     if runtime.settings.agent_review != "off":
-        from src.llm.crews import AccessReviewer
-
         reviewer = AccessReviewer(runtime.settings)
     txn = secrets.token_hex(8)
     request = AccessRequest(txn=txn, door=args.door, uid=args.uid,
@@ -66,16 +63,12 @@ def cmd_decide(args: argparse.Namespace) -> None:
 
 
 def cmd_scenarios(_: argparse.Namespace) -> None:
-    from src.mcp_server.servers.simulator import run_policy_scenarios
-
     result = run_policy_scenarios()
     _print(result)
     sys.exit(1 if result["failed"] else 0)
 
 
 def cmd_compliance(args: argparse.Namespace) -> None:
-    from src.mcp_server.servers.auditor import check_compliance
-
     _print(asyncio.run(check_compliance(args.node)))
 
 
@@ -84,8 +77,6 @@ def cmd_provision(args: argparse.Namespace) -> None:
 
     Secrets never pass through an agent; this operator command is how they reach the node.
     """
-    from src.mcp_server.runtime import get_runtime
-
     runtime = get_runtime()
     node = runtime.sot.inventory.nodes.get(args.gateway)
     if node is None or node.kind != "gateway":
