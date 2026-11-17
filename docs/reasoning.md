@@ -28,15 +28,26 @@ The gateway accepts a decision only for the transaction it has in flight, and on
 
 ```mermaid
 flowchart LR
-    R[AccessRequest] --> V[validate]
+    R([AccessRequest]) --> V[validate]
     V --> I[identify]
     I --> A[authenticate]
     A --> Z[authorize]
     Z --> K[risk]
     K -->|permit| G[agent review]
-    G --> C[combine]
-    V & I & A & Z & K -->|deny| C
-    C --> S[sign + log]
+    G --> C{combine}
+    V & I & A & Z & K -.->|deny| C
+    C --> S([sign + log])
+
+    classDef io fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
+    classDef stage fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
+    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
+    classDef gate fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:1.5px
+    classDef done fill:#e2f4e6,stroke:#2e7d32,color:#103a17,stroke-width:2px
+    class R io
+    class V,I,A,Z,K stage
+    class G agent
+    class C gate
+    class S done
 ```
 
 | Stage | Question answered | Deny codes |
@@ -110,12 +121,23 @@ Both agents receive the full stage trace and run under the remaining decision bu
 Configuration follows the workflow of the AI network engineer team [4]: gather, plan, verify, deploy, validate. It is carried out by a hierarchical crew:
 
 ```mermaid
-flowchart TB
-    O[Orchestrator<br/>manager, no tools] --> C[Configurator<br/>librarian, identity, verifier, simulator]
-    O --> E[Executor<br/>deployer, observer]
-    O --> A[Compliance auditor<br/>auditor, observer, simulator]
-    C -- plan_id --> E
-    E -- result --> A
+flowchart LR
+    O{"<b>Orchestrator</b><br/>manager, no tools"}
+    C["<b>Configurator</b><br/>librarian, identity,<br/>verifier, simulator"]
+    E["<b>Executor</b><br/>deployer, observer"]
+    A["<b>Compliance auditor</b><br/>auditor, observer,<br/>simulator"]
+    O -.->|delegates| C
+    O -.-> E
+    O -.-> A
+    C -->|plan_id| E
+    E -->|result| A
+
+    classDef gate fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:1.5px
+    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
+    classDef check fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
+    class O gate
+    class C,E agent
+    class A check
 ```
 
 The orchestrator has no tools and only delegates. Specialists communicate through task context and through plan ids, which are the only artefacts that cross from configuration to execution.
