@@ -418,9 +418,6 @@
         <mxCell id="v132" value="LLM Access: multi-agent policy decision for IoT smart gates over MCP" style="text;html=1;strokeColor=none;fillColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontSize=22;align=center;" vertex="1" parent="1">
           <mxGeometry x="300" y="1100" width="1590" height="40" as="geometry" />
         </mxCell>
-        <mxCell id="v133" value="Person icons: Freepik, via Flaticon (flaticon.com)." style="text;html=1;strokeColor=none;fillColor=none;whiteSpace=wrap;fontFamily=Helvetica;fontSize=10;fontColor=#808080;align=left;" vertex="1" parent="1">
-          <mxGeometry x="20" y="1150" width="600" height="20" as="geometry" />
-        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>
