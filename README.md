@@ -9,10 +9,10 @@ Smart workplaces guard their zones with network-attached gates that capture a cr
 This repository is the matching **Policy Decision Point (PDP)**. Deterministic stages (validation, identification, authentication, ABAC authorisation with XACML deny-overrides [3], and risk) establish what is certain; language-model agents then apply natural-language guidance to live evidence and may only *tighten* the outcome. The same agents configure gates, recorders and policy through a plan, verify, deploy and audit workflow, following the multi-server MCP design of [4] and the LLM-to-MCP prototypes [5, 6]. The firmware is linked as a submodule and reached only through its HTTP API, keeping the decision layer separate from the enforcement layer.
 
 <p align="center">
-  <a href="docs/overview.pdf"><img src="docs/overview.png" alt="Site overview: smart gateways and a movement recorder on an office floor plan, linked over the LAN to the PDP host in the server room" width="100%"></a>
+  <a href="docs/overview.pdf"><img src="docs/overview.png" alt="Deployment overview: a lab door annotated with the smart gateway, RFID reader, keypad, latch, buzzer and movement recorder, linked to the edge tier of PDP host, LAN, gateways and devices" width="100%"></a>
 </p>
 
-*Figure 1. Site overview ([PDF](docs/overview.pdf), source [docs/overview.drawio](docs/overview.drawio)). An employee is permitted at door-1 of the engineering lab and denied at door-2 of the server room. Floor plan: Oliver Building, Pittsburgh (D. H. Burnham & Co., 1915), public domain via Wikimedia Commons; room use is illustrative.*
+*Figure 1. Deployment overview ([PDF](docs/overview.pdf), source [docs/overview.drawio](docs/overview.drawio)). Photo: Ca.garcia.s, "Electronic access control (BSL3 Lab)", [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), via [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Electronic_access_control_%28BSL3_Lab%29.jpg); labels added. Icons: Freepik and Those Icons, via [Flaticon](https://www.flaticon.com).*
 
 ## Project Structure
 
@@ -60,7 +60,7 @@ llm-access/
   <a href="docs/architecture.pdf"><img src="docs/architecture.png" alt="System architecture: operator and sysadmin above the PDP; interface, agent, MCP tool and deterministic engine layers; data stores below; ESP32 edge tier on the right" width="100%"></a>
 </p>
 
-*Figure 2. System architecture ([PDF](docs/architecture.pdf), source [docs/architecture.drawio](docs/architecture.drawio)). Steps 1 to 6 trace an access decision; A to C trace a configuration change.*
+*Figure 2. System architecture ([PDF](docs/architecture.pdf), source [docs/architecture.drawio](docs/architecture.drawio)). Steps 1 to 6 trace an access decision; A to C trace a configuration change. Person icons: Freepik, via [Flaticon](https://www.flaticon.com).*
 
 The decision tier is implemented in Python: the agents run on CrewAI with any supported LLM (Claude by default), the tool layer on the Model Context Protocol, and the decision interface on FastAPI.
 
@@ -78,62 +78,6 @@ The decision tier is implemented in Python: the agents run on CrewAI with any su
 The reasoning model is specified in [docs/reasoning.md](docs/reasoning.md). Its two parts are summarised here.
 
 ### Access Decision
-
-```mermaid
-flowchart TB
-    REQ(["<b>Access request</b><br/>from the enforcement point"])
-    SOT[("<b>Source of truth</b><br/>identities and policy")]
-    EVD[("<b>Door evidence</b><br/>gateway and camera events")]
-
-    subgraph ENGINE["Deterministic engine: no LLM, stops at the first failing stage"]
-        direction LR
-        V["<b>1. Validate</b><br/>trusted gateway,<br/>fresh transaction"]
-        I["<b>2. Identify</b><br/>active card<br/>and subject"]
-        A["<b>3. Authenticate</b><br/>PIN bound to<br/>the transaction"]
-        Z["<b>4. Authorize</b><br/>attribute rules,<br/>deny overrides"]
-        K["<b>5. Assess risk</b><br/>live door<br/>evidence"]
-        V --> I --> A --> Z --> K
-    end
-
-    subgraph AGENTS["Agent review: preliminary permits only, within the decision budget"]
-        direction LR
-        EA["<b>Evidence analyst</b><br/>explains what happened<br/>at the door"]
-        AJ["<b>Access judge</b><br/>applies the written<br/>guidance"]
-        EA -->|evidence brief| AJ
-    end
-
-    C{"<b>Combine</b><br/>agents can only tighten"}
-    P(["<b>Permit</b><br/>signed for the gateway"])
-    D(["<b>Deny</b><br/>signed for the gateway"])
-    LOG[("<b>Decision log</b><br/>hash-chained")]
-
-    REQ --> ENGINE
-    SOT -.-> ENGINE
-    EVD -.-> ENGINE
-    EVD -.->|through MCP tools| AGENTS
-    ENGINE -->|preliminary permit| AGENTS
-    AGENTS -->|verdict and confidence| C
-    ENGINE -.->|first failing stage| D
-    C -->|confirmed| P
-    C -->|deny, low confidence or failure| D
-    P --> LOG
-    D --> LOG
-
-    classDef io fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
-    classDef stage fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
-    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
-    classDef gate fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:1.5px
-    classDef permit fill:#e2f4e6,stroke:#2e7d32,color:#103a17,stroke-width:2px
-    classDef deny fill:#fbe4e4,stroke:#c62828,color:#4a1010,stroke-width:2px
-    class REQ,SOT,EVD,LOG io
-    class V,I,A,Z,K stage
-    class EA,AJ agent
-    class C gate
-    class P permit
-    class D deny
-    style ENGINE fill:transparent,stroke:#3d6bb3,stroke-dasharray:5 4
-    style AGENTS fill:transparent,stroke:#7a4fb5,stroke-dasharray:5 4
-```
 
 * **Deterministic stages** stop at the first denial. Authorisation evaluates ABAC rules (target and condition) with deny-overrides and default deny. A denial reports the first *near miss*, for example `outside_schedule` or `insufficient_clearance`.
 * **Risk** joins badge and camera events into movement classes (attested transit, unattested motion, unconsummated grant) [1]. It denies on critical signals (lockdown, denial velocity) and forwards the others to the agents.
