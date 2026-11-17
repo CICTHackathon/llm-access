@@ -1,8 +1,8 @@
 # LLM Access: Multi-Agent Policy Decision for IoT Smart Gates
 
-## Overview: Policy- and rule-based access reasoning over standardised MCP interfaces.
-
 Smart workplaces guard their zones with network-attached gates that capture a credential and defer the decision to a central policy engine. The *Smart Gateway* [1] provides this edge tier: an ESP32 node acting as the Policy Enforcement Point (PEP) of the NIST SP 800-162 ABAC model [2], which captures an RFID UID and a nonce-salted PIN digest, and an ESP32-CAM that independently records movement through the portal. Neither node holds policy.
+
+## Overview: Policy- and rule-based access reasoning over standardised MCP interfaces.
 
 This repository is the matching **Policy Decision Point (PDP)**. Deterministic stages (validation, identification, authentication, ABAC authorisation with XACML deny-overrides [3], and risk) establish what is certain; language-model agents then apply natural-language guidance to live evidence and may only *tighten* the outcome. The same agents configure gates, recorders and policy through a plan, verify, deploy and audit workflow, following the multi-server MCP design of [4] and the LLM-to-MCP prototypes [5, 6]. The firmware is linked as a submodule and reached only through its HTTP API, keeping the decision layer separate from the enforcement layer.
 
