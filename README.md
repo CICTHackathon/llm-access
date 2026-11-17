@@ -8,6 +8,12 @@ Smart workplaces guard their zones with network-attached gates that capture a cr
 
 This repository is the matching **Policy Decision Point (PDP)**. Deterministic stages (validation, identification, authentication, ABAC authorisation with XACML deny-overrides [3], and risk) establish what is certain; language-model agents then apply natural-language guidance to live evidence and may only *tighten* the outcome. The same agents configure gates, recorders and policy through a plan, verify, deploy and audit workflow, following the multi-server MCP design of [4] and the LLM-to-MCP prototypes [5, 6]. The firmware is linked as a submodule and reached only through its HTTP API, keeping the decision layer separate from the enforcement layer.
 
+<p align="center">
+  <a href="docs/overview.pdf"><img src="docs/overview.png" alt="Site overview: smart gateways and a movement recorder on an office floor plan, linked over the LAN to the PDP host in the server room" width="100%"></a>
+</p>
+
+*Figure 1. Site overview ([PDF](docs/overview.pdf), source [docs/overview.drawio](docs/overview.drawio)). An employee is permitted at door-1 of the engineering lab and denied at door-2 of the server room. Floor plan: Oliver Building, Pittsburgh (D. H. Burnham & Co., 1915), public domain via Wikimedia Commons; room use is illustrative.*
+
 ## Project Structure
 
 ```
@@ -39,7 +45,10 @@ llm-access/
 │           ├── plans.py        # Verified change plans
 │           └── audit_log.py    # Hash-chained decision log
 ├── config/                     # Source of truth: inventory, identities, policies, scenarios
-├── docs/reasoning.md           # Specification of the reasoning model
+├── docs/
+│   ├── reasoning.md            # Specification of the reasoning model
+│   ├── overview.drawio         # Site overview (exported to .pdf and .png)
+│   └── architecture.drawio     # System architecture (exported to .pdf and .png)
 ├── iot/                        # Edge firmware and hardware (git submodule) [1]
 ├── tests/                      # Unit and integration tests
 └── pyproject.toml
@@ -47,70 +56,11 @@ llm-access/
 
 ## System Architecture
 
-```mermaid
-flowchart TB
-    subgraph CLIENTS["Clients"]
-        PEP["<b>Enforcement point</b><br/>captures card and PIN,<br/>actuates the latch"]
-        REC["<b>Movement recorder</b><br/>records motion<br/>at the door"]
-        OP["<b>Operator</b><br/>intents, reviews,<br/>audits"]
-    end
+<p align="center">
+  <a href="docs/architecture.pdf"><img src="docs/architecture.png" alt="System architecture: operator and sysadmin above the PDP; interface, agent, MCP tool and deterministic engine layers; data stores below; ESP32 edge tier on the right" width="100%"></a>
+</p>
 
-    subgraph INTERFACE["Decision tier interface"]
-        PDP["<b>Policy decision point</b><br/>answers every<br/>access request"]
-        OPI["<b>Operations interface</b><br/>takes operator<br/>intents"]
-    end
-
-    subgraph AGENTS["Agent layer"]
-        REV["<b>Review crew</b><br/>evidence analyst,<br/>access judge"]
-        OPS["<b>Operations crew</b><br/>orchestrator, configurator,<br/>executor, auditor"]
-    end
-
-    subgraph TOOLS["MCP tool layer"]
-        KNOW["<b>Knowledge</b><br/>librarian,<br/>identity"]
-        CHANGE["<b>Change</b><br/>verifier,<br/>deployer"]
-        ASSURE["<b>Assurance</b><br/>observer, auditor,<br/>simulator"]
-    end
-
-    subgraph CORE["Deterministic core"]
-        ENG["<b>Decision engine</b><br/>rules, risk,<br/>verification"]
-        SOT[("<b>Source of truth</b><br/>site, identities,<br/>policy")]
-        AUD[("<b>Audit state</b><br/>decision log,<br/>verified plans")]
-    end
-
-    PEP <-->|access request, signed decision| PDP
-    REC -.->|motion evidence| PDP
-    OP -->|intent| OPI
-    PDP <-->|permit review| REV
-    OPI --> OPS
-    PDP --> ENG
-    REV --> KNOW
-    REV --> ASSURE
-    OPS --> KNOW
-    OPS --> CHANGE
-    OPS --> ASSURE
-    KNOW --> SOT
-    CHANGE --> ENG
-    CHANGE --> AUD
-    ASSURE --> ENG
-    ASSURE --> AUD
-    CHANGE -.->|verified changes| PEP
-
-    classDef client fill:#eef1f5,stroke:#5b6b80,color:#1f2933,stroke-width:1.5px
-    classDef iface fill:#fff4d6,stroke:#b8860b,color:#3d2c00,stroke-width:2px
-    classDef agent fill:#efe5fb,stroke:#7a4fb5,color:#2c1748,stroke-width:1.5px
-    classDef tool fill:#e0f2f1,stroke:#00796b,color:#0b3a35,stroke-width:1.5px
-    classDef core fill:#e3ecfa,stroke:#3d6bb3,color:#132a4a,stroke-width:1.5px
-    class PEP,REC,OP client
-    class PDP,OPI iface
-    class REV,OPS agent
-    class KNOW,CHANGE,ASSURE tool
-    class ENG,SOT,AUD core
-    style CLIENTS fill:transparent,stroke:#5b6b80,stroke-dasharray:5 4
-    style INTERFACE fill:transparent,stroke:#b8860b,stroke-dasharray:5 4
-    style AGENTS fill:transparent,stroke:#7a4fb5,stroke-dasharray:5 4
-    style TOOLS fill:transparent,stroke:#00796b,stroke-dasharray:5 4
-    style CORE fill:transparent,stroke:#3d6bb3,stroke-dasharray:5 4
-```
+*Figure 2. System architecture ([PDF](docs/architecture.pdf), source [docs/architecture.drawio](docs/architecture.drawio)). Steps 1 to 6 trace an access decision; A to C trace a configuration change.*
 
 The decision tier is implemented in Python: the agents run on CrewAI with any supported LLM (Claude by default), the tool layer on the Model Context Protocol, and the decision interface on FastAPI.
 
