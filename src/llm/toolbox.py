@@ -7,14 +7,19 @@ the executor cannot edit policy.
 
 from __future__ import annotations
 
-import contextlib
+import asyncio
+import concurrent.futures
 import os
 import sys
 from collections.abc import Iterable
 from typing import Any
 
-from crewai_tools import MCPServerAdapter
-from mcp import StdioServerParameters
+# CrewAI's built-in MCP client. It replaces crewai-tools' MCPServerAdapter, whose
+# dependencies alone pushed the Vercel function bundle past the 500 MB limit.
+from crewai.mcp.client import MCPClient
+from crewai.mcp.tool_resolver import MCPToolResolver
+from crewai.mcp.transports.stdio import StdioTransport
+from crewai.tools.mcp_native_tool import MCPNativeTool
 
 ROLE_SERVERS: dict[str, tuple[str, ...]] = {
     "evidence_analyst": ("observer", "auditor"),
@@ -37,40 +42,83 @@ def servers_for(roles: Iterable[str]) -> list[str]:
     return sorted({server for role in roles for server in ROLE_SERVERS[role]})
 
 
+def _run_sync(coro: Any) -> Any:
+    """Run a coroutine to completion, also from inside a running event loop."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 class Toolbox:
-    """Starts the MCP servers a set of roles needs, and hands each role its tools."""
+    """Starts the MCP servers a set of roles needs, and hands each role its tools.
+
+    Tools are discovered once per server at start. Each tool call then opens its own
+    stdio connection to that server (how CrewAI's native MCP tools work), so no
+    subprocess stays running between calls.
+    """
 
     def __init__(self, servers: Iterable[str], *, env: dict[str, str] | None = None,
                  connect_timeout: int = 60) -> None:
         self._servers = list(servers)
-        self._env = {**os.environ, **(env or {})}
+        root = os.getcwd()
+        pythonpath = os.pathsep.join(p for p in (root, os.environ.get("PYTHONPATH")) if p)
+        self._env = {**os.environ, "PYTHONPATH": pythonpath, **(env or {})}
         self._timeout = connect_timeout
-        self._adapters: dict[str, Any] = {}
+        self._tools: dict[str, list[Any]] = {}
+
+    def _client(self, server: str) -> MCPClient:
+        transport = StdioTransport(command=sys.executable,
+                                   args=["-m", "src.mcp_server.main", server], env=self._env)
+        return MCPClient(transport=transport, connect_timeout=self._timeout)
+
+    def _discover(self, server: str) -> list[Any]:
+        async def list_tools() -> list[dict[str, Any]]:
+            client = self._client(server)
+            await client.connect()
+            try:
+                return await client.list_tools()
+            finally:
+                await client.disconnect()
+
+        tools: list[Any] = []
+        for spec in _run_sync(list_tools()):
+            name = spec["name"]
+            schema = spec.get("inputSchema")
+            tool = MCPNativeTool(
+                client_factory=lambda server=server: self._client(server),
+                tool_name=name,
+                tool_schema={
+                    "description": spec.get("description", ""),
+                    "args_schema": MCPToolResolver._json_schema_to_pydantic(name, schema)
+                    if schema else None,
+                },
+                server_name=server,
+                original_tool_name=spec.get("original_name", name),
+            )
+            tool.name = name  # keep the server's own tool name, without a server prefix
+            tools.append(tool)
+        return tools
 
     def start(self) -> Toolbox:
-        for name in self._servers:
-            if name in self._adapters:
-                continue
-            params = StdioServerParameters(
-                command=sys.executable, args=["-m", "src.mcp_server.main", name],
-                env=self._env, cwd=os.getcwd())
-            self._adapters[name] = MCPServerAdapter(params, connect_timeout=self._timeout)
+        for server in self._servers:
+            if server not in self._tools:
+                self._tools[server] = self._discover(server)
         return self
 
     def tools_for(self, role: str) -> list[Any]:
         tools: list[Any] = []
         for server in ROLE_SERVERS[role]:
-            if server not in self._adapters:
+            if server not in self._tools:
                 raise RuntimeError(f"MCP server {server!r} for role {role!r} is not started")
-            tools.extend(self._adapters[server].tools)
+            tools.extend(self._tools[server])
         withheld = ROLE_WITHHELD.get(role, frozenset())
         return [t for t in tools if t.name not in withheld]
 
     def stop(self) -> None:
-        for adapter in self._adapters.values():
-            with contextlib.suppress(Exception):  # shutting down; nothing useful to raise
-                adapter.stop()
-        self._adapters.clear()
+        self._tools.clear()
 
     def __enter__(self) -> Toolbox:
         return self.start()

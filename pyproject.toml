@@ -7,8 +7,8 @@ license = { file = "LICENSE" }
 requires-python = ">=3.11,<3.14"
 authors = [{ name = "Le Huyen Trang" }]
 dependencies = [
-    "crewai[anthropic]>=1.15",
-    "crewai-tools[mcp]>=1.15",
+    "crewai[anthropic]>=1.15,<2",
+    "numpy>=2",  # imported by crewai at startup; normally arrives via the dropped lancedb
     "mcp>=1.20",
     "fastapi>=0.115",
     "uvicorn>=0.30",
@@ -32,6 +32,19 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[tool.vercel]
+entrypoint = "src.main:app"
+
+[tool.uv]
+# CrewAI lists these for its memory/knowledge (RAG) stores, which this project does not
+# use. With pyarrow they are ~400 MB and break Vercel's 500 MB function limit; the
+# impossible marker drops them from resolution.
+override-dependencies = [
+    "lancedb; sys_platform == 'never'",
+    "pyarrow; sys_platform == 'never'",
+    "qdrant-client; sys_platform == 'never'",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
