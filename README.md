@@ -49,6 +49,7 @@ llm-access/
 │   └── architecture.drawio     # System architecture (exported to .pdf and .png)
 ├── iot/                        # Edge firmware and hardware (git submodule) [1]
 ├── tests/                      # Unit and integration tests
+├── web/                        # Web interface: dashboard, assistant, admin IoT management
 └── pyproject.toml
 ```
 
@@ -273,6 +274,19 @@ open-webui serve --port 3000
 ```
 
 In Open WebUI, add an OpenAI API connection with base URL `http://localhost:8080/v1` and select the model `smartgate-ops`.
+
+### Web Interface
+
+[`web/`](web/README.md) is the web console of the PDP. Every signed-in role sees the decisions dashboard. Operators and administrators can chat with the operations crew. Only administrators can manage the edge nodes: gateway status, overrides, offline cache, enrolment and settings; camera live view, events and WebDAV recordings; and each node's own console. The server calls the PDP and the nodes, so device tokens never reach the browser.
+
+```bash
+cd web
+cp .env.example .env            # set NEXTAUTH_SECRET; LLM_ACCESS_API_URL=http://localhost:8080 for the live PDP
+pnpm install
+pnpm dev                        # seeds demo data and serves http://localhost:3000
+```
+
+Demo accounts (password `Demo1234!`): `admin@smartgate.demo`, `operator@smartgate.demo` and `auditor@smartgate.demo`. Without a PDP or hardware, the interface runs on seeded sample decisions and simulated nodes.
 
 ### Testing
 
