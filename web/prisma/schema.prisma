@@ -1,0 +1,112 @@
+// Web interface database. SQLite keeps local setup to one file; switch the provider
+// to "postgresql" (and DATABASE_URL) for a shared deployment.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// A person who signs in to the web interface. `role` is ADMIN, OPERATOR or AUDITOR.
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         String    @default("AUDITOR")
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  threads ChatThread[]
+  audit   AuditEntry[]
+
+  @@map("users")
+}
+
+/// An edge node: an ESP32 gateway (enforcement point) or an ESP32-CAM recorder.
+/// The API token is never stored here; `tokenEnv` names the environment variable holding it.
+model Device {
+  id        String   @id
+  kind      String
+  name      String
+  door      String?
+  zone      String?
+  baseUrl   String   @map("base_url")
+  streamUrl String?  @map("stream_url")
+  tokenEnv  String?  @map("token_env")
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("devices")
+}
+
+/// A conversation with the operations assistant.
+model ChatThread {
+  id        String        @id @default(cuid())
+  userId    String        @map("user_id")
+  title     String
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@index([userId, updatedAt])
+  @@map("chat_threads")
+}
+
+/// `mode` records whether the PDP answered ("live") or the offline assistant did ("offline").
+model ChatMessage {
+  id        String     @id @default(cuid())
+  threadId  String     @map("thread_id")
+  role      String
+  content   String
+  mode      String     @default("live")
+  createdAt DateTime   @default(now()) @map("created_at")
+  thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@map("chat_messages")
+}
+
+/// Every administrative action taken through the web interface.
+model AuditEntry {
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
+  actorEmail String   @map("actor_email")
+  action     String
+  target     String
+  detail     String   @default("{}")
+  ok         Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@map("audit_entries")
+}
+
+/// Sample decisions in the PDP's record format, shown when the PDP is not configured
+/// or not reachable, so the dashboard works in demos.
+model DecisionSample {
+  id          String   @id
+  txn         String
+  door        String
+  uid         String
+  subjectId   String?  @map("subject_id")
+  effect      String
+  code        String
+  stages      String
+  matched     String   @default("[]")
+  risk        String   @default("[]")
+  agent       String?
+  latencyMs   Int      @map("latency_ms")
+  decidedAt   DateTime @map("decided_at")
+
+  @@index([decidedAt])
+  @@map("decision_samples")
+}
