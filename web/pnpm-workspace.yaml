@@ -1,0 +1,6 @@
+# pnpm 11 runs dependency build scripts only when they are allowed here.
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
