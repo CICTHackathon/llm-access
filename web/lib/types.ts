@@ -21,8 +21,8 @@ export type Decision = {
   latency_ms: number
 }
 
-/** Where data came from: the live PDP, or sample data because the PDP is off or unreachable. */
-export type Source = "live" | "sample" | "offline"
+/** Where data came from: the live PDP, or sample data because the PDP is off, unreachable or empty. */
+export type Source = "live" | "sample" | "offline" | "empty"
 
 export type Sourced<T> = { data: T; source: Source; error?: string }
 

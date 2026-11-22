@@ -56,7 +56,12 @@ export async function listDecisions(
       const q = new URLSearchParams({ limit: String(limit) })
       if (opts.door) q.set("door", opts.door)
       if (opts.uid) q.set("uid", opts.uid)
-      return { data: await pdpFetch(`/pdp/decisions?${q}`), source: "live" }
+      const live: Decision[] = await pdpFetch(`/pdp/decisions?${q}`)
+      // A fresh PDP has an empty log: show the samples instead of empty charts, and say so.
+      if (live.length === 0 && !opts.door && !opts.uid) {
+        return { ...(await sampleDecisions(limit, opts)), source: "empty" }
+      }
+      return { data: live, source: "live" }
     } catch (error) {
       return { ...(await sampleDecisions(limit, opts)), source: "offline", error: describe(error) }
     }
