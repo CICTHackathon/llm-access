@@ -288,6 +288,10 @@ pnpm dev                        # seeds demo data and serves http://localhost:30
 
 Demo accounts (password `Demo1234!`): `admin@smartgate.demo`, `operator@smartgate.demo` and `auditor@smartgate.demo`. Without a PDP or hardware, the interface runs on seeded sample decisions and simulated nodes.
 
+### Cloud Demo
+
+The hosted demo splits the two tiers. The PDP runs on Render from [`render.yaml`](render.yaml) (free plan, `dry_run`, since the gateways are not reachable from the cloud); [create the Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/CICTHackathon/llm-access) and enter `ANTHROPIC_API_KEY` when prompted. The web interface runs on Vercel with root directory `web/` and a Neon PostgreSQL database connected from the project's Storage tab; `pnpm run vercel-build` creates the tables and seeds an empty database. Set `LLM_ACCESS_API_URL` to the Render URL, `NEXTAUTH_SECRET`, `NEXTAUTH_URL` and `IOT_MODE=mock`. The free Render service sleeps when idle, so the first request after a pause can take up to a minute; until then the dashboard shows sample data.
+
 ### Testing
 
 ```bash
