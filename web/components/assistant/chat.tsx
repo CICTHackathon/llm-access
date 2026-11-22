@@ -41,7 +41,10 @@ export function Chat({ initialThreads, pdpMode }: { initialThreads: ThreadSummar
     }
   }, [active])
 
-  React.useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [messages, busy])
+  React.useEffect(() => {
+    // Block body on purpose: scrollIntoView returns a Promise in newer browsers, and React would call it as the cleanup.
+    bottom.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages, busy])
 
   async function send(text: string) {
     const message = text.trim()
