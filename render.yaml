@@ -24,10 +24,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
+      # Gemini through its OpenAI-compatible endpoint: free tier, key from aistudio.google.com.
       - key: LLM_ACCESS_LLM_MODEL
-        value: anthropic/claude-opus-5-5
-      - key: ANTHROPIC_API_KEY
-        sync: false # prompted on first deploy
+        value: openai/gemini-2.5-flash
+      - key: LLM_ACCESS_LLM_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai/
+      - key: LLM_ACCESS_LLM_API_KEY
+        sync: false # set in the Render dashboard
       - key: LLM_ACCESS_AGENT_REVIEW
         value: on_permit
       - key: LLM_ACCESS_AGENT_FAILURE_MODE
