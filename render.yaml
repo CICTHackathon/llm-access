@@ -26,7 +26,7 @@ services:
         value: 3.12.8
       # Gemini through its OpenAI-compatible endpoint: free tier, key from aistudio.google.com.
       - key: LLM_ACCESS_LLM_MODEL
-        value: openai/gemini-3.5-flash-lite
+        value: openai/gemini-2.5-flash
       - key: LLM_ACCESS_LLM_BASE_URL
         value: https://generativelanguage.googleapis.com/v1beta/openai/
       - key: LLM_ACCESS_LLM_API_KEY
