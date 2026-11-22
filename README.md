@@ -211,6 +211,9 @@ llm-access serve --host 0.0.0.0 --port 8080
 # Point a gateway at the PDP and install its secrets out of band
 llm-access provision gw-1 --pdp-url http://<pdp-ip>:8080/pdp/decide
 
+# Fill an empty decision log with two weeks of demo decisions (real pipeline, no LLM)
+llm-access seed-demo
+
 # Check every node against the security baseline
 llm-access compliance
 
@@ -290,7 +293,7 @@ Demo accounts (password `Demo1234!`): `admin@smartgate.demo`, `operator@smartgat
 
 ### Cloud Demo
 
-The hosted demo splits the two tiers. The PDP runs on Render from [`render.yaml`](render.yaml) (free plan, `dry_run`, since the gateways are not reachable from the cloud); [create the Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/CICTHackathon/llm-access) and set `LLM_ACCESS_LLM_API_KEY` to a free Google AI Studio key; the agents use Gemini 2.5 Flash through its OpenAI-compatible endpoint. The web interface runs on Vercel with root directory `web/` and a Neon PostgreSQL database connected from the project's Storage tab; `pnpm run vercel-build` creates the tables and seeds an empty database. Set `LLM_ACCESS_API_URL` to the Render URL, `NEXTAUTH_SECRET`, `NEXTAUTH_URL` and `IOT_MODE=mock`. The free Render service sleeps when idle, so the first request after a pause can take up to a minute; until then the dashboard shows sample data.
+The hosted demo splits the two tiers. The PDP runs on Render from [`render.yaml`](render.yaml) (free plan, `dry_run`, since the gateways are not reachable from the cloud); [create the Blueprint](https://dashboard.render.com/blueprint/new?repo=https://github.com/CICTHackathon/llm-access) and set `LLM_ACCESS_LLM_API_KEY` to a free Google AI Studio key; the agents use Gemini 2.5 Flash through its OpenAI-compatible endpoint. The web interface runs on Vercel with root directory `web/` and a Neon PostgreSQL database connected from the project's Storage tab; `pnpm run vercel-build` creates the tables and seeds an empty database. Set `LLM_ACCESS_API_URL` to the Render URL, `NEXTAUTH_SECRET`, `NEXTAUTH_URL` and `IOT_MODE=mock`. Render wipes the service disk on every restart, so `LLM_ACCESS_SEED_DEMO=true` refills the empty decision log at startup with two weeks of demo decisions, run through the real pipeline with a stand-in reviewer. The free Render service sleeps when idle, so the first request after a pause can take up to a minute; until then the dashboard shows sample data.
 
 ### Testing
 

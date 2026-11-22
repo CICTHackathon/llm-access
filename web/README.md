@@ -84,7 +84,7 @@ two weeks of sample access decisions that follow `config/identities.yaml` and
 | `LLM_ACCESS_API_URL` | Decisions come from the seeded samples; the assistant answers offline from local data | Decisions, log integrity and the assistant come from the PDP (`llm-access serve`) |
 | `IOT_MODE` | The nodes are simulated from the seeded decisions | The server calls the ESP32 nodes at the addresses on the Devices page |
 
-When the PDP is configured but does not answer, pages fall back to the samples and say so.
+When the PDP is configured but does not answer, or answers with an empty decision log, pages fall back to the samples and say so. To give a PDP its own data, run `llm-access seed-demo` or start it with `LLM_ACCESS_SEED_DEMO=true`.
 
 To run against the real system:
 
