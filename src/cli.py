@@ -12,6 +12,7 @@ from typing import Any
 
 import uvicorn
 
+from src.demo import seed_demo_decisions
 from src.llm.crews import AccessReviewer, run_operations
 from src.llm.decision import DecisionService
 from src.mcp_server.engine.domain.access import AccessRequest
@@ -101,6 +102,16 @@ def cmd_provision(args: argparse.Namespace) -> None:
             "pdpTimeoutMs": changes["pdpTimeoutMs"]})
 
 
+def cmd_seed_demo(args: argparse.Namespace) -> None:
+    runtime = get_runtime()
+    count = asyncio.run(seed_demo_decisions(runtime, days=args.days))
+    if count == 0:
+        print(f"{runtime.settings.decision_log_path} already has decisions; "
+              "delete it to seed again.", file=sys.stderr)
+    _print({"seeded": count, "log": str(runtime.settings.decision_log_path),
+            "integrity": runtime.decisions.verify()})
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="llm-access",
                                      description="Smart Gateway multi-agent PDP.")
@@ -138,6 +149,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("compliance", help="check nodes against the security baseline")
     p.add_argument("--node")
     p.set_defaults(func=cmd_compliance)
+
+    p = sub.add_parser("seed-demo", help="fill an empty decision log with demo decisions")
+    p.add_argument("--days", type=int, default=14)
+    p.set_defaults(func=cmd_seed_demo)
 
     p = sub.add_parser("provision", help="point a gateway at this PDP and push its secrets")
     p.add_argument("gateway")

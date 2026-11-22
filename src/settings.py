@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     deploy_mode: DeployMode = "live"
     plan_ttl_s: int = Field(900, gt=0)
 
+    # Demo: fill an empty decision log with two weeks of decisions at startup.
+    seed_demo: bool = False
+
     # HTTP API.
     host: str = "0.0.0.0"
     port: int = 8080

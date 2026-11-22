@@ -28,6 +28,7 @@ from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
 from src import __version__
+from src.demo import seed_demo_decisions
 from src.llm.crews import AccessReviewer, run_operations
 from src.llm.decision import DecisionService
 from src.mcp_server.runtime import get_runtime
@@ -48,6 +49,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                           runtime.settings.agent_failure_mode)
     app.state.runtime = runtime
     app.state.decisions = DecisionService(runtime, reviewer)
+    if runtime.settings.seed_demo:
+        try:
+            await seed_demo_decisions(runtime)
+        except Exception:  # noqa: BLE001 - a failed demo seed must not stop the PDP
+            log.exception("demo seed failed")
     try:
         yield
     finally:
