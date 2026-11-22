@@ -111,3 +111,34 @@ def test_http_endpoint_with_agents_off(runtime, monkeypatch) -> None:
         assert (reply["effect"], reply["reason"]) == ("deny", "subject_inactive")
         assert client.get(f"/pdp/decisions/{reply['decision_id']}").status_code == 200
         assert client.get("/pdp/integrity").json()["ok"] is True
+
+
+class UpstreamError(Exception):
+    def __init__(self, message: str, status_code: int):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def test_ops_errors_say_why(runtime, monkeypatch) -> None:
+    monkeypatch.setattr(runtime.settings, "agent_review", "off")
+
+    def busy(*_args: Any, **_kwargs: Any) -> None:
+        try:
+            raise UpstreamError("This model is currently experiencing high demand.", 503)
+        except UpstreamError as exc:
+            raise RuntimeError("crew failed") from exc
+
+    def broken(*_args: Any, **_kwargs: Any) -> None:
+        raise ValueError("bad tool schema")
+
+    with TestClient(app) as client:
+        monkeypatch.setattr("src.main.run_operations", busy)
+        reply = client.post("/ops/run", json={"intent": "status of door-1"})
+        assert reply.status_code == 503 and reply.headers["retry-after"] == "30"
+        assert reply.json()["detail"]["error"] == "model_busy"
+        assert "high demand" in reply.json()["detail"]["message"]
+
+        monkeypatch.setattr("src.main.run_operations", broken)
+        reply = client.post("/ops/run", json={"intent": "status of door-1"})
+        assert reply.status_code == 502
+        assert reply.json()["detail"]["error"] == "ValueError"
