@@ -1,13 +1,14 @@
-// Web interface database. SQLite keeps local setup to one file; switch the provider
-// to "postgresql" (and DATABASE_URL) for a shared deployment.
+// Web interface database: PostgreSQL (e.g. Neon). DATABASE_URL is the pooled URL,
+// DATABASE_URL_UNPOOLED the direct one used by `prisma db push`.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 /// A person who signs in to the web interface. `role` is ADMIN, OPERATOR or AUDITOR.
