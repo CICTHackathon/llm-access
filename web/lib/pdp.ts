@@ -15,7 +15,12 @@ async function pdpFetch(path: string, init: RequestInit = {}, timeoutMs = env.pd
     cache: "no-store",
     signal: AbortSignal.timeout(timeoutMs),
   })
-  if (!res.ok) throw new Error(`PDP ${path} answered HTTP ${res.status}`)
+  if (!res.ok) {
+    // The PDP explains agent failures in `detail`, e.g. that the model is busy.
+    const body = await res.json().catch(() => null)
+    const reason = body?.detail?.message ?? (typeof body?.detail === "string" ? body.detail : "")
+    throw new Error(`PDP ${path} answered HTTP ${res.status}${reason ? `: ${reason}` : ""}`)
+  }
   return res.json()
 }
 
