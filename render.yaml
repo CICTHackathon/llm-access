@@ -1,0 +1,39 @@
+# Render Blueprint for the PDP (FastAPI). The web interface in web/ is deployed on Vercel
+# and reaches this service through LLM_ACCESS_API_URL.
+#
+# Deploy: https://dashboard.render.com/blueprint/new?repo=https://github.com/CICTHackathon/llm-access
+services:
+  - type: web
+    name: llm-access-api
+    runtime: python
+    plan: free
+    region: virginia # next to Vercel's iad1, where the web interface runs
+    branch: main
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run --no-sync uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    # Rebuild only for backend changes, not for web/ or docs.
+    buildFilter:
+      paths:
+        - src/**
+        - config/**
+        - pyproject.toml
+        - uv.lock
+        - render.yaml
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: LLM_ACCESS_LLM_MODEL
+        value: anthropic/claude-opus-5-5
+      - key: ANTHROPIC_API_KEY
+        sync: false # prompted on first deploy
+      - key: LLM_ACCESS_AGENT_REVIEW
+        value: on_permit
+      - key: LLM_ACCESS_AGENT_FAILURE_MODE
+        value: deny
+      # The gateways sit on the lab LAN, out of reach from the cloud: record plans only.
+      - key: LLM_ACCESS_DEPLOY_MODE
+        value: dry_run
+      - key: LLM_ACCESS_ALLOW_ACTUATION
+        value: "false"
