@@ -118,9 +118,36 @@ class OpsRequest(BaseModel):
     dry_run: bool = True
 
 
+BUSY_STATUSES = {429, 503, 529}
+
+
+def _agent_failure(exc: BaseException, model: str) -> HTTPException:
+    """A failed crew run as a 503 (the model is busy or rate-limited) or a 502 saying why."""
+    cause: BaseException | None = exc
+    seen: set[int] = set()
+    while cause is not None and id(cause) not in seen:
+        seen.add(id(cause))
+        status = getattr(cause, "status_code", None)
+        if isinstance(status, int):
+            break
+        cause = cause.__cause__ or cause.__context__
+    else:
+        cause, status = exc, None
+    detail = {"error": type(cause).__name__, "model": model, "upstream_status": status,
+              "message": " ".join(str(cause).split())[:400]}
+    if status in BUSY_STATUSES:
+        return HTTPException(status_code=503, headers={"Retry-After": "30"},
+                             detail={**detail, "error": "model_busy"})
+    return HTTPException(status_code=502, detail=detail)
+
+
 async def _run_ops(intent: str, dry_run: bool) -> dict[str, Any]:
     settings = get_runtime().settings
-    report = await asyncio.to_thread(run_operations, settings, intent, dry_run=dry_run)
+    try:
+        report = await asyncio.to_thread(run_operations, settings, intent, dry_run=dry_run)
+    except Exception as exc:
+        log.exception("operations crew failed")
+        raise _agent_failure(exc, settings.llm_model) from exc
     return report.model_dump()
 
 
