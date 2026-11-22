@@ -40,3 +40,6 @@ services:
         value: dry_run
       - key: LLM_ACCESS_ALLOW_ACTUATION
         value: "false"
+      # The free disk is wiped on every restart: refill the decision log so the dashboard has data.
+      - key: LLM_ACCESS_SEED_DEMO
+        value: "true"
